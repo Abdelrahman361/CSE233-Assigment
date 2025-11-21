@@ -1,0 +1,173 @@
+A) file1.c
+----------
+Source:
+#include <stdio.h>
+void hello() {
+    printf("Hello from file1!\n");
+}
+void hello();
+int main() {
+    hello();
+    return 0;
+}
+
+Explanation:
+- Defines a function `hello()` that prints: "Hello from file1!".
+- The line `void hello();` is a forward declaration (prototype). It is redundant here because the function is already defined above it.
+- `main()` calls `hello()`. When compiled and linked into an executable, running the program prints:
+  Hello from file1!
+
+Notes:
+- If this file is compiled alone, it makes a complete program.
+- When used together with other object files that also define `main()` there will be a conflict; only one translation unit should define `main()` for a final executable.
+
+B) file2.c
+----------
+Source:
+#include <stdio.h>
+int main() {
+    printf("This is a simple program.\n");
+    return 0;
+}
+
+Explanation:
+- A very simple C program that prints "This is a simple program." and returns 0.
+- This file provides its own `main()`; when compiled and run by itself it is a complete program.
+
+C) process.c (fork example)
+---------------------------
+Source:
+#include <stdio.h>
+#include <unistd.h>
+
+int main() {
+    pid_t pid = fork();
+
+    if (pid == 0) {
+        printf("This is the child process. PID: %d\n", getpid());
+    } else if (pid > 0) {
+        printf("This is the parent process. PID: %d\n", getpid());
+    } else {
+        printf("Fork failed!\n");
+    }
+
+    return 0;
+}
+
+Explanation:
+- Uses the POSIX `fork()` system call to create a new process (child).
+- `fork()` duplicates the calling process. After fork:
+  - In the child process `fork()` returns 0.
+  - In the parent process `fork()` returns the child's PID (a positive integer).
+  - If `fork()` returns -1, the call failed.
+- Each process continues executing from the point of fork. The program prints lines indicating whether execution is happening in the parent or the child and shows the process PID via `getpid()`.
+- Expected output (order may vary):
+  This is the parent process. PID: 12345
+  This is the child process. PID: 12346
+
+D) louder.c (example program)
+-----------------------------
+Source:
+(Example: a program that prints a louder message)
+#include <stdio.h>
+int main() {
+    printf("LOUDER: This program is louder!\n");
+    return 0;
+}
+
+Explanation:
+- Simple program that prints a message. Included in lab examples as another compilation target so students practice building multiple executables and querying libraries with `ldd`.
+
+2) What is the job of the Linker?
+---------------------------------
+- The Linker takes one or more object files (.o) produced by the compiler and combines them into a single executable or library.
+- Responsibilities:
+  - Resolve symbol references: match function calls and global variable references to their definitions across object files.
+  - Assign final addresses to code and data sections.
+  - Combine code/data sections and produce relocation records.
+  - Include needed libraries (static linking) or leave dynamic linking references (shared libraries) for the loader at runtime.
+- Example: `gcc file1.o file2.o -o program` invokes the linker to create `program` from the two object files.
+
+3) What is the job of the Loader?
+---------------------------------
+- The Loader is the part of the operating system that loads an executable into memory and prepares it for execution.
+- Responsibilities:
+  - Read the executable's metadata (ELF header on Linux) and program segments.
+  - Map code and data segments into the process address space (from executable file and shared libraries).
+  - Resolve dynamic linking by loading required shared libraries and performing relocations (runtime symbol resolution).
+  - Set up the initial stack, environment, and entry point, then transfer control to the program's `main` (actually its entry point).
+- `ldd program` helps inspect the shared libraries the loader will load at runtime.
+
+4) Example Makefile (working)
+-----------------------------
+Save this content as `Makefile` in the project root.
+
+# Simple Makefile for lab examples
+CC = gcc
+CFLAGS = -Wall -Wextra -std=c11
+OBJ = file1.o file2.o process.o
+EXES = linker_output louder process simple_program
+
+.PHONY: all clean run_examples
+
+all: $(EXES)
+
+# Compile object files
+file1.o: file1.c
+	$(CC) $(CFLAGS) -c file1.c
+
+file2.o: file2.c
+	$(CC) $(CFLAGS) -c file2.c
+
+process.o: process.c
+	$(CC) $(CFLAGS) -c process.c
+
+# Build executables
+linker_output: file1.o file2.o
+	$(CC) file1.o file2.o -o linker_output
+
+louder: louder.c
+	$(CC) $(CFLAGS) louder.c -o louder
+
+process: process.o
+	$(CC) process.o -o process
+
+simple_program: file2.o
+	$(CC) file2.o -o simple_program
+
+# Utility targets
+run_examples: linker_output louder process simple_program
+	./linker_output || true
+	./louder || true
+	./process || true
+	./simple_program || true
+
+clean:
+	rm -f *.o $(EXES)
+
+Notes:
+- The Makefile compiles object files and links them to produce multiple executables.
+- Use `make` to build all targets, or `make louder` / `make process` to build specific programs.
+- `make clean` removes object files and executables.
+
+5) How to run and test (commands)
+---------------------------------
+# Build everything
+make
+
+# Build single target
+make process
+
+# Run the programs
+./linker_output
+./simple_program
+./louder
+./process
+
+# Inspect dynamic dependencies for louder
+ldd louder
+
+# Expected outputs
+- ./linker_output : will run the program built from file1.o and file2.o. Since file1 and file2 both contain `main()` in the examples, in practice you should only link object files that don't conflict; the sample above presumes file1.o provides a `hello()` and file2.o is compiled without its `main()` for linking. Adjust sources to avoid multiple main() definitions when linking together.
+- ./simple_program : prints "This is a simple program."
+- ./process : prints parent/child lines demonstrating fork.
